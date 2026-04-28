@@ -40,12 +40,14 @@ with col1:
     vehicletype = st.selectbox("vehicle_type",["SUV","Sedan","Hatchback"])
 with col2:
     age = st.slider("vehicle_age",1,10)
-    mileage = st.slider("mileage",5000,100000)
+    mileage = st.number_input("mileage")
 
 st.divider()
 
 if st.button("Calculate Plan Price"):
-    result = price_plan(brand,vehicletype,age,mileage)
+    with st.spinner("Analysing vehicle risk and pricing..."):
+        result = price_plan(brand,vehicletype,age,mileage)
+    st.success("Pricing analysis complete")
     st.divider()
     col1,col2,col3=st.columns(3)
 
@@ -95,13 +97,18 @@ if st.button("Calculate Plan Price"):
 
     risk_matrix = pd.DataFrame(risk_matrix, index=age_range, columns=mileage_range)
     risk_normalized = (risk_matrix - risk_matrix.min().min()) / (risk_matrix.max().max() - risk_matrix.min().min())
+    risk_labels=np.select([risk_normalized<0.33,risk_normalized<0.66],
+                          ["Low","Medium"],
+                          default="High")
+    
+    
     fig, ax = plt.subplots(figsize=(3,2))
     sns.heatmap(risk_normalized, cmap="Reds",
                 linewidths=0.3,
                 linecolor="white",
-                annot=True,
-                fmt=".2f",
-                annot_kws={"size":4},
+                annot=risk_labels,
+                fmt="",
+                annot_kws={"size":3},
                 cbar=False
                 )
 
@@ -110,12 +117,22 @@ if st.button("Calculate Plan Price"):
     ax.set_title("Repair Cost Risk Heatmap",fontsize=6)
     ax.set_xticklabels([f"{int(x/1000)}k" for x in mileage_range], rotation=45)
     ax.tick_params(axis='both', labelsize=6)
+    age_idx = np.abs(age_range - age).argmin()
+    mileage_idx = np.abs(mileage_range - mileage).argmin()
+    ax.scatter(mileage_idx + 0.5, age_idx + 0.5, s=60, color="blue", edgecolor="black", linewidth=0.5)
+    ax.scatter(mileage_idx + 0.5, age_idx + 0.5, s=220, color="blue", alpha=0.25)
+    ax.spines[:].set_visible(False)
+    with st.expander("Advanced risk analysis",expanded=True): 
+        col1, col2 = st.columns([1,1.3])
+        with col1:
+            st.plotly_chart(fig_profit, use_container_width=True)
+        with col2:
+            plt.tight_layout()
+            plt.xticks(fontsize=4)
+            plt.yticks(fontsize=4)
+            st.pyplot(fig,use_container_width=True)
+            plt.close(fig)
 
-    col1, col2 = st.columns([1,1.3])
-    with col1:
-        st.plotly_chart(fig_profit, use_container_width=True)
-    with col2:
-        plt.tight_layout()
-        plt.xticks(fontsize=4)
-        plt.yticks(fontsize=4)
-        st.pyplot(fig)
+        st.divider()
+        risk_level = risk_labels[age_idx,mileage_idx]
+        st.markdown(f"This vehicle sits in the {risk_level} repair cost segment for vehicle with aged {age} years with {mileage:,} km mileage")
